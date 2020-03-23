@@ -5,39 +5,33 @@
 // Replace Standard Servo Library with this to enable audio recording with TMRpcm Library
 //#include <Servo.h>
 #include <MobaTools.h> 
-#define Servo Servo8
+#define Servo MoToServo
 // ------------------------------------------------------------------------------
 #include <NewPing.h>
 #include <Wire.h>
 
 //#define HAS_MP3 // comment out this line to disable all functionality with DFPlayer/MP3 output
-//#define HAS_DISPLAY // comment out this line to disable all functionality with ssd1306 display
-#define HAS_SNIPS // comment out this line to disable voice commands
+#define HAS_DISPLAY // comment out this line to disable all functionality with ssd1306 display
+#define HAS_WIFI // comment out this line to disable voice commands
 #define DONT_MOVE // comment out this line to disable movement servos for testing purpose
 
 
 #define Console Serial
 #define CONSOLE_BAUDRATE    115200       // baudrate used for console
-#define DFPLAYER_BAUDRATE   9600        // baudrate used for communication with DFPlayerMini
-#define ESP8266_BAUDRATE    115200      // baudrate used for communication with esp8266 Wifi module
 #define AUDIO_INPUT_PIN     A1          // Set the port to be used for input!
 
-// IP address for this demo is a local IP.
-// Replace it with the IP address where you have a TCP socket server running
-char * const TCP_SERVER PROGMEM = "192.168.178.61";
-// Port for this demo is the port used by the TCP socket server.
-// Replace it with the port that your TCP socket server is listening to
-uint16_t const TCP_PORT PROGMEM = 23;
+#ifdef HAS_WIFI
+  #include "AudioStreamer.h"
+#endif // HAS_WIFI
 
-#ifdef HAS_SNIPS
-#include <WiFiEspAT.h>
-#define ESP8266Serial Serial2
-WiFiClient client;
-
-#endif // HAS_SNIPS
-
+#ifdef HAS_MP3
+  #define DFPLAYER_BAUDRATE   9600        // baudrate used for communication with DFPlayerMini
+  #define DFPlayerPort Serial3
+#endif
 
 #ifdef HAS_DISPLAY
+#include <U8x8lib.h>
+#include <U8g2lib.h>
 #define Lucky_width 107
 #define Lucky_height  31
 static const unsigned char Lucky_bits[] U8X8_PROGMEM = {

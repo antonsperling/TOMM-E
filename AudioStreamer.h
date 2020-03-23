@@ -6,11 +6,15 @@
 #include <SD.h>
 #include <TMRpcm.h>
 #include <WiFiEspAT.h>
+#include <PubSubClient.h>
 
 #define SD_ChipSelectPin 53  //example uses hardware SS pin 53 on Mega2560
 //#define SD_ChipSelectPin 4  //using digital pin 4 on arduino nano 328, can use other pins
 #define ANALOG_INPIN A0 // Which analog pin to record from
 #define AUDIO_SAMPLE_RATE 16000 // Which sampleRate to use
+
+#define ESP8266Serial Serial2
+#define ESP8266_BAUDRATE    115200      // baudrate used for communication with esp8266 Wifi module
 
 TMRpcm audio;   // create an object for use in this sketch
 
@@ -18,18 +22,34 @@ char newWavFile[] = "00000000.wav";
 
 bool audioInitialized = false;
 unsigned long startRec;
-byte countFiles = 0;
+uint8_t countFiles = 0;
+
+WiFiClient wifiFtpCommandClient;
+WiFiClient wifiFtpDataClient;
+WiFiClient wifiMqttClient;
+PubSubClient mqttClient(wifiMqttClient);
+
+boolean mqttconnected = false;
+unsigned long voiceActivatedTime = 0L;
+
+// IP address for this demo is a local IP.
+// Replace it with the IP address where you have a FTP/MQTT server running
+char * const FTP_SERVER PROGMEM = "192.168.178.61";
+char * const MQTT_SERVER PROGMEM = "192.168.178.61";
+uint16_t const FTP_COMMAND_PORT PROGMEM = 21;
+uint16_t const MQTT_PORT PROGMEM = 1883;
+
 
 
 /*********************************************************/
 
 void startRecording(const char *fileName, uint32_t sampleRate) {
 
-  Serial.print(F("Start Recording: "));
-  Serial.println(fileName);
+  Console.print(F("Start Recording: "));
+  Console.println(fileName);
 
   if (SD.exists(fileName)) {
-    Serial.println(F("Deleted file, because already existed"));
+    Console.println(F("Deleted file, because already existed"));
     SD.remove(fileName);
   }
 
@@ -40,10 +60,10 @@ void startRecording(const char *fileName, uint32_t sampleRate) {
 
 /*********************************************************/
 
-void stopRecording(const char *fileName, WiFiClient * tcp) {
+void stopRecording(const char *fileName) {
 
   audio.stopRecording(fileName);
-  Serial.println(F("Recording Stopped"));
+  Console.println(F("Recording Stopped"));
 
 /*********************************************************/
 /** IMPLEMENT SEND OVER WIFI HERE ************************/
@@ -79,36 +99,32 @@ void stopRecording(const char *fileName, WiFiClient * tcp) {
   newWavFile[7] = countFiles % 10 + '0';
 
   startRecording(newWavFile, AUDIO_SAMPLE_RATE);
-  audioInitialized = true;
 }
 
 /*********************************************************/
-
+// startAudioRecording is beeing invoked only once, when
+// switching robot state from STATE_INIT
 void startAudioRecording() {
   startRecording(newWavFile, AUDIO_SAMPLE_RATE);
   Console.println(F("Starting connection to server..."));
-  if (client.connect(TCP_SERVER, TCP_PORT)) {
+  if (wifiFtpCommandClient.connect(FTP_SERVER, FTP_COMMAND_PORT)) {
     Console.println(F("connected to server"));
 
-    //client.println("GET /asciilogo.txt HTTP/1.1");
-    //client.print("Host: ");
-    //client.println(server);
-    //client.println("Connection: close");
-    //client.println();
-    //client.flush();
   }
 
   audioInitialized = true;
 }
 
-void processAudioRecording(WiFiClient * tcp) {
+/*********************************************************/
+
+void processAudioRecording() {
   if (!audioInitialized) {
     Console.println(F("Audio not initialized. Not going to process anything..."));
     return;
   }
 
   if (millis() - startRec >= 4000) {
-    stopRecording(newWavFile, tcp);
+    stopRecording(newWavFile);
     startRec = millis();
   }
 }

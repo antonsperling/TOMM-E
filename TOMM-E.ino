@@ -24,6 +24,8 @@
 // after making the servos continuos rotation, the center angle has to be identified
 // via manual probe. If everything went okay, it should be near to 90 degree. Mine are 92 and 93.
 // Change this for your servos!
+// Great HowTo make a servo continuos can be found here: https://learn.adafruit.com/modifying-servos-for-continuous-rotation
+// This howto is great
 #define CENTER_ANGLE_LEFT 92 
 #define CENTER_ANGLE_RIGHT 93
 
@@ -59,7 +61,7 @@
 
 int currentState = STATE_INIT;
 int nextState = STATE_INIT;
-long lastStateChange = 0UL; // when did last State change occur
+unsigned long lastStateChange = 0UL; // when did last State change occur
 #define MAX_STATE_TIME 30000 // only stay in one state for max. 30 seconds
 
 Servo servoLeft;
@@ -73,10 +75,10 @@ NewPing sonarLeft(TRIG_PIN_LEFT, ECHO_PIN_LEFT, MAX_DISTANCE); // NewPing setup 
 NewPing sonarRight(TRIG_PIN_RIGHT, ECHO_PIN_RIGHT, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
 float durationLeft, distanceLeft, durationRight, distanceRight;
-long loopCount = 0;
-long nextPingTime = 0UL;
-long nextCryForPower = 0UL;
-long blockDisplayChangeUntil = 0UL;
+unsigned long loopCount = 0;
+unsigned long nextPingTime = 0UL;
+unsigned long nextCryForPower = 0UL;
+unsigned long blockDisplayChangeUntil = 0UL;
 int firstTriangleXPos = 0;
 
 // Measure battery voltage using a voltage divider. Currently not working on my setup
@@ -94,16 +96,10 @@ float R2 = 47000.0;
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);  // Adafruit ESP8266/32u4/ARM Boards + FeatherWing OLED
 #endif
 
-#ifdef HAS_SNIPS
-#include "AudioStreamer.h"
-
-boolean mqttconnected = false;
-unsigned long voiceActivatedTime = 0L;
-#endif
 
 void setup() {
 
-  Serial.begin(9600); // Open serial monitor at 9600 baud to see state changes an distances measured.
+  Serial.begin(CONSOLE_BAUDRATE); // Open serial monitor at 9600 baud to see state changes an distances measured.
 
   servoLeft.attach(SERVO_PIN_LEFT);
   servoRight.attach(SERVO_PIN_RIGHT);
@@ -112,14 +108,13 @@ void setup() {
   servoArmLeft.attach(SERVO_PIN_ARM_LEFT);
   servoArmRight.attach(SERVO_PIN_ARM_RIGHT);
 
-  #ifdef HAS_DISPLAY
-    u8g2.begin(); // Enable Display
-    //u8g2.enableUTF8Print();    // enable UTF8 support for the Arduino print() function
-  #endif
-  
   fullStop();  // set Servos to Center == Stop
   servoLiftHead.write(LIFT_LOOK_CENTER);
-  //delay(3000); // wait for 3 seconds after power up, to not run away without closing backdoor ;-)
+
+  #ifdef HAS_DISPLAY
+    u8g2.begin(); // Enable Display
+  #endif
+  
 
 #ifdef HAS_MP3
   DFPlayerPort.begin(DFPLAYER_BAUDRATE);
@@ -132,10 +127,9 @@ void setup() {
   mp3.outputDevice(DFPLAYER_DEVICE_SD);
 #endif
 
-#ifdef HAS_SNIPS
+#ifdef HAS_WIFI
   ESP8266Serial.begin(ESP8266_BAUDRATE);
   Console.println(F("Going to initialize AudioStreamer"));
-  bool wifiok;
   WiFi.init(ESP8266Serial);
 
 
@@ -154,15 +148,23 @@ void setup() {
   }
   Console.println();
   Console.println(F("Connected to WiFi network."));
-  
-  audio.speakerPin = 45; //5,6,11 or 46 on Mega, 9 on Uno, Nano, etc
-  pinMode(46, OUTPUT); //Pin pairs: 9,10 Mega: 5-2,6-7,11-12,46-45
+
+  // ***********************************************************************
+  // HINT !!! HINT !!! HINT !!!
+  // HINT !!! HINT !!! HINT !!! to myself
+  // ***********************************************************************
+  // Deactivated these lines, as speakers are not connected to Uno/Mega, but to
+  // the DFPlayer Module. If something stops working with the audio recording,
+  // maybe the outputs must be set again to some dummy pins....
+  //audio.speakerPin = 45; //5,6,11 or 46 on Mega, 9 on Uno, Nano, etc
+  //pinMode(46, OUTPUT); //Pin pairs: 9,10 Mega: 5-2,6-7,11-12,46-45
+  // ***********************************************************************
 
   if (!SD.begin(SD_ChipSelectPin)) {
-    Serial.println(F("Failed to init SD card"));
+    Console.println(F("Failed to init SD card"));
     return;
   } else {
-    Serial.println(F("SD OK"));
+    Console.println(F("SD OK"));
   }
   // The audio library needs to know which CS pin to use for recording
   audio.CSPin = SD_ChipSelectPin;
@@ -476,24 +478,24 @@ void readVoltage() {
 }
 
 void startAudioStream() {
-#ifdef HAS_SNIPS
+#ifdef HAS_WIFI
   startAudioRecording();
 #endif
 }
 void readVoiceInput() {
-#ifdef HAS_SNIPS
-  processAudioRecording(&client);
+#ifdef HAS_WIFI
+  processAudioRecording();
 #endif
 }
 
 void readMQTT() {
-#ifdef HAS_SNIPS
+#ifdef HAS_WIFI
   //esp.Process();
 #endif
 }
 
 void waitForVoiceCommand() {
-#ifdef HAS_SNIPS
+#ifdef HAS_WIFI
   if (millis() - voiceActivatedTime > 7000) {
     Console.println(F("Waited > 7s for voice command."));
     setNextState(STATE_FORW);
@@ -502,7 +504,7 @@ void waitForVoiceCommand() {
 }
 
 void subscribeToTopics() {
-#ifdef HAS_SNIPS
+#ifdef HAS_WIFI
   //mqtt.subscribe(F("hermes/hotword/default/detected"));
   //Console.println(F("Done Subscription to hotword topic"));
 #endif
