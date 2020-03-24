@@ -71,8 +71,8 @@ Servo servoTurnHead;
 Servo servoArmLeft; // less degree == arm up
 Servo servoArmRight; // less degree == arm down
 
-NewPing sonarLeft(TRIG_PIN_LEFT, ECHO_PIN_LEFT, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
-NewPing sonarRight(TRIG_PIN_RIGHT, ECHO_PIN_RIGHT, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
+UltraSonic sonarLeft(TRIG_PIN_LEFT, ECHO_PIN_LEFT, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
+UltraSonic sonarRight(TRIG_PIN_RIGHT, ECHO_PIN_RIGHT, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
 float durationLeft, distanceLeft, durationRight, distanceRight;
 unsigned long loopCount = 0;
@@ -119,7 +119,7 @@ void setup() {
 #ifdef HAS_MP3
   DFPlayerPort.begin(DFPLAYER_BAUDRATE);
   if (!mp3.begin(DFPlayerPort)) {  //If connection to DFPlayer Module not available, stop here
-    Console.println(F("Connection to DFPlayer not possible. Check and Reset."));
+    Serial.println(F("Connection to DFPlayer not possible. Check and Reset."));
     while (true); // loop forever
   }
   mp3.setTimeOut(500); //Set serial communictaion time out 500ms
@@ -128,26 +128,17 @@ void setup() {
 #endif
 
 #ifdef HAS_WIFI
-  ESP8266Serial.begin(ESP8266_BAUDRATE);
-  Console.println(F("Going to initialize AudioStreamer"));
-  WiFi.init(ESP8266Serial);
-
-
- if (WiFi.status() == WL_NO_MODULE) {
-    Console.println();
-    Console.println(F("Communication with WiFi module failed!"));
-    // don't continue
-    while (true);
-  }
+  Serial.println(F("Going to initialize AudioStreamer"));
+  WiFi.begin(ssid, password);
 
   // waiting for connection to Wifi network set with the SetupWiFiConnection sketch
-  Console.println(F("Waiting for connection to WiFi"));
+  Serial.println(F("Waiting for connection to WiFi"));
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
-    Console.print(F("."));
+    Serial.print(F("."));
   }
-  Console.println();
-  Console.println(F("Connected to WiFi network."));
+  Serial.println();
+  Serial.println(F("Connected to WiFi network."));
 
   // ***********************************************************************
   // HINT !!! HINT !!! HINT !!!
@@ -160,14 +151,14 @@ void setup() {
   //pinMode(46, OUTPUT); //Pin pairs: 9,10 Mega: 5-2,6-7,11-12,46-45
   // ***********************************************************************
 
-  if (!SD.begin(SD_ChipSelectPin)) {
-    Console.println(F("Failed to init SD card"));
+  if (!SD.begin()) {
+    Serial.println(F("Failed to init SD card"));
     return;
   } else {
-    Console.println(F("SD OK"));
+    Serial.println(F("SD OK"));
   }
   // The audio library needs to know which CS pin to use for recording
-  audio.CSPin = SD_ChipSelectPin;
+  //audio.CSPin = SD_ChipSelectPin;
 
 
 #endif
@@ -497,7 +488,7 @@ void readMQTT() {
 void waitForVoiceCommand() {
 #ifdef HAS_WIFI
   if (millis() - voiceActivatedTime > 7000) {
-    Console.println(F("Waited > 7s for voice command."));
+    Serial.println(F("Waited > 7s for voice command."));
     setNextState(STATE_FORW);
   }
 #endif
@@ -506,7 +497,7 @@ void waitForVoiceCommand() {
 void subscribeToTopics() {
 #ifdef HAS_WIFI
   //mqtt.subscribe(F("hermes/hotword/default/detected"));
-  //Console.println(F("Done Subscription to hotword topic"));
+  //Serial.println(F("Done Subscription to hotword topic"));
 #endif
 }
 void checkVoltage() {

@@ -4,19 +4,11 @@
 
 #include <SPI.h>
 #include <SD.h>
-#include <TMRpcm.h>
-#include <WiFiEspAT.h>
+#include <WiFi.h>
 #include <PubSubClient.h>
 
-#define SD_ChipSelectPin 53  //example uses hardware SS pin 53 on Mega2560
-//#define SD_ChipSelectPin 4  //using digital pin 4 on arduino nano 328, can use other pins
-#define ANALOG_INPIN A0 // Which analog pin to record from
 #define AUDIO_SAMPLE_RATE 16000 // Which sampleRate to use
 
-#define ESP8266Serial Serial2
-#define ESP8266_BAUDRATE    115200      // baudrate used for communication with esp8266 Wifi module
-
-TMRpcm audio;   // create an object for use in this sketch
 
 char newWavFile[] = "00000000.wav";
 
@@ -40,30 +32,78 @@ uint16_t const FTP_COMMAND_PORT PROGMEM = 21;
 uint16_t const MQTT_PORT PROGMEM = 1883;
 
 
+//#################################################################
+// Audio Sampling on ESP32
+//#################################################################
+#include <soc/sens_reg.h>
+#include <soc/sens_struct.h>
+#define ADC_SAMPLES_COUNT 1000
+// ADC1_CHANNEL_0 is GPIO 36 on ESP32 (see https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/adc.html#_CPPv414adc1_channel_t)
+#define ADC1_CHANNEL_0 0
+int16_t abuf[ADC_SAMPLES_COUNT];
+int16_t abufPos = 0;
+portMUX_TYPE DRAM_ATTR timerMux = portMUX_INITIALIZER_UNLOCKED; 
+TaskHandle_t adcTaskHandle;
+//hw_timer_t * adcTimer = NULL; // our timer
+
+
+int IRAM_ATTR local_adc1_read(int channel) {
+    uint16_t adc_value;
+    SENS.sar_meas_start1.sar1_en_pad = (1 << channel); // only one channel is selected
+    while (SENS.sar_slave_addr1.meas_status != 0);
+    SENS.sar_meas_start1.meas1_start_sar = 0;
+    SENS.sar_meas_start1.meas1_start_sar = 1;
+    while (SENS.sar_meas_start1.meas1_done_sar == 0);
+    adc_value = SENS.sar_meas_start1.meas1_data_sar;
+    return adc_value;
+}
+
+void IRAM_ATTR onTimer() {
+  portENTER_CRITICAL_ISR(&timerMux);
+
+  abuf[abufPos++] = local_adc1_read(ADC1_CHANNEL_0);
+  
+  if (abufPos >= ADC_SAMPLES_COUNT) { 
+    abufPos = 0;
+
+    // Notify adcTask that the buffer is full.
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    vTaskNotifyGiveFromISR(adcTaskHandle, &xHigherPriorityTaskWoken);
+    if (xHigherPriorityTaskWoken) {
+      portYIELD_FROM_ISR();
+    }
+  }
+  portEXIT_CRITICAL_ISR(&timerMux);
+}
 
 /*********************************************************/
 
-void startRecording(const char *fileName, uint32_t sampleRate) {
+void startRecording(char *fileName, uint32_t sampleRate) {
 
-  Console.print(F("Start Recording: "));
-  Console.println(fileName);
+  Serial.print(F("Start Recording: "));
+  Serial.println(fileName);
 
   if (SD.exists(fileName)) {
-    Console.println(F("Deleted file, because already existed"));
+    Serial.println(F("Deleted file, because already existed"));
     SD.remove(fileName);
   }
 
-  audio.startRecording(fileName, sampleRate, ANALOG_INPIN);
+  //audio.startRecording(fileName, sampleRate, ANALOG_INPIN);
+  // Do own ADC sample recording
+  // #################################################################################################
+  
   audioInitialized = true;
   startRec = millis();
 }
 
 /*********************************************************/
 
-void stopRecording(const char *fileName) {
+void stopRecording(char *fileName) {
 
-  audio.stopRecording(fileName);
-  Console.println(F("Recording Stopped"));
+  //audio.stopRecording(fileName);
+  // Do own ADC sample recording
+  // #################################################################################################
+  Serial.println(F("Recording Stopped"));
 
 /*********************************************************/
 /** IMPLEMENT SEND OVER WIFI HERE ************************/
@@ -73,16 +113,16 @@ void stopRecording(const char *fileName) {
 
   File lastRec = SD.open(fileName);
   if (!lastRec) {
-    Console.println(F("Could not open File for tcp transfer"));
+    Serial.println(F("Could not open File for tcp transfer"));
   }
   //uint8_t filesize = myFile.size();
   
   lastRec.seek(0);
-  Console.print(F("Going to send file over tcp. Filesize is "));
+  Serial.print(F("Going to send file over tcp. Filesize is "));
   uint32_t filesize = lastRec.size();
-  Console.println(filesize);
+  Serial.println(filesize);
   lastRec.close();
-  Console.println(F("Finished send file over tcp"));
+  Serial.println(F("Finished send file over tcp"));
 /** IMPLEMENT SEND OVER WIFI HERE ************************/
 /** IMPLEMENT SEND OVER WIFI HERE ************************/
 /** IMPLEMENT SEND OVER WIFI HERE ************************/
@@ -106,9 +146,9 @@ void stopRecording(const char *fileName) {
 // switching robot state from STATE_INIT
 void startAudioRecording() {
   startRecording(newWavFile, AUDIO_SAMPLE_RATE);
-  Console.println(F("Starting connection to server..."));
+  Serial.println(F("Starting connection to server..."));
   if (wifiFtpCommandClient.connect(FTP_SERVER, FTP_COMMAND_PORT)) {
-    Console.println(F("connected to server"));
+    Serial.println(F("connected to server"));
 
   }
 
@@ -119,7 +159,7 @@ void startAudioRecording() {
 
 void processAudioRecording() {
   if (!audioInitialized) {
-    Console.println(F("Audio not initialized. Not going to process anything..."));
+    Serial.println(F("Audio not initialized. Not going to process anything..."));
     return;
   }
 

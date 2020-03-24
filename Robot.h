@@ -1,14 +1,11 @@
 #ifndef _TOMM_E_Robot_h_
 #define _TOMM_E_Robot_h_
+// ------------------------------------------------------------------------------
 #include <Arduino.h>
-// ------------------------------------------------------------------------------
-// Replace Standard Servo Library with this to enable audio recording with TMRpcm Library
-//#include <Servo.h>
-#include <MobaTools.h> 
-#define Servo MoToServo
-// ------------------------------------------------------------------------------
-#include <NewPing.h>
+#include <ESP32Servo.h>
+#include "UltraSonic.h"
 #include <Wire.h>
+// ------------------------------------------------------------------------------
 
 //#define HAS_MP3 // comment out this line to disable all functionality with DFPlayer/MP3 output
 #define HAS_DISPLAY // comment out this line to disable all functionality with ssd1306 display
@@ -16,12 +13,12 @@
 #define DONT_MOVE // comment out this line to disable movement servos for testing purpose
 
 
-#define Console Serial
 #define CONSOLE_BAUDRATE    115200       // baudrate used for console
 #define AUDIO_INPUT_PIN     A1          // Set the port to be used for input!
 
 #ifdef HAS_WIFI
   #include "AudioStreamer.h"
+  #include "WifiConfig.h"
 #endif // HAS_WIFI
 
 #ifdef HAS_MP3
